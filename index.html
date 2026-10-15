@@ -18,7 +18,7 @@ button.p,select,input[type=search]{background:var(--panel);color:var(--tx);borde
 button.p{cursor:pointer}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
 #stat{color:var(--mu);font-size:12px;margin-left:auto}
-main{padding:14px;max-width:1100px;margin:0 auto}
+main{padding:14px;max-width:1280px;margin:0 auto}
 .bar{display:flex;flex-wrap:wrap;gap:8px 14px;margin-bottom:12px;align-items:center}
 .note{color:var(--mu);font-size:12px;margin:0 0 12px}
 details{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin-bottom:8px}
@@ -33,8 +33,9 @@ summary span{color:var(--mu);font-weight:400}
 .mats{color:var(--mu);font-size:12px}
 table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line)}
 th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-th{font-size:12px;color:var(--mu);font-weight:400;position:sticky;top:53px;background:var(--panel)}
-td.n{text-align:right;font-variant-numeric:tabular-nums}
+th{font-size:12px;color:var(--mu);font-weight:400;position:sticky;top:var(--hh,53px);z-index:2;background:var(--panel);box-shadow:0 1px 0 var(--line);white-space:nowrap}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.nm{min-width:240px}
 td img{width:36px;height:36px;object-fit:contain;display:block;border-radius:4px}
 td input[type=number]{width:62px;background:var(--bg);color:var(--tx);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font:inherit}
 .st{font-weight:700;white-space:nowrap}
@@ -45,7 +46,6 @@ td input[type=number]{width:62px;background:var(--bg);color:var(--tx);border:1px
 .stp button{width:30px;height:30px;padding:0;font-size:16px;line-height:1;text-align:center}
 td .stp input[type=number]{width:50px;text-align:center}
 #msg{padding:30px;text-align:center;color:var(--mu);white-space:pre-wrap}
-@media (max-width:640px){.c-hide{display:none}th{top:90px}}
 </style>
 </head>
 <body>
@@ -190,17 +190,17 @@ function rItems(){
   <p class="note">未クリアのタスク・ハイドアウトの必要数を合算。「探す」と「渡す」が両方あるタスクは多い方を採用し、「いずれか○個」型の納品は集計に含めずタスク側に表示します。所持数は自動保存されます。</p>
   <div class="bar"><input type="search" id="q" placeholder="アイテム名で検索" value="${esc(S.q)}">
   <select id="flt"><option value="all">すべて (${rows.length})</option><option value="bad">不足 (${cnt('bad')})</option><option value="eq">ちょうど (${cnt('eq')})</option><option value="ok">売却可 (${cnt('ok')})</option></select></div>
-  <div style="overflow-x:auto"><table><thead><tr><th></th><th>アイテム</th><th class="n">必要</th><th>所持</th><th>FIR所持</th><th>判定</th><th class="c-hide">売値(最高)</th></tr></thead><tbody>
+  <table><thead><tr><th></th><th>アイテム</th><th class="n">必要</th><th>所持</th><th>FIR所持</th><th>判定</th><th class="c-hide">売値(最高)</th></tr></thead><tbody>
   ${list.map(r=>{
     const label=r.state==='bad'?`不足 ${-r.diff}`:r.state==='eq'?'ちょうど':(r.need===0?'売却可（全数）':`売却可 +${r.diff}`);
     const fw=r.fir>0&&r.haveF<r.fir?`<span class="fir">FIR あと${r.fir-r.haveF}</span>`:'';
-    return `<tr><td><img src="${esc(r.it.icon)}" alt="" loading="lazy"></td><td>${esc(r.it.n)}</td>
+    return `<tr><td><img src="${esc(r.it.icon)}" alt="" loading="lazy"></td><td class="nm">${esc(r.it.n)}</td>
     <td class="n" title="タスク ${r.task} / ハイドアウト ${r.hide}">${r.need}${r.fir?`<span class="mats"> (FIR ${r.fir})</span>`:''}<div class="mats">T${r.task} / H${r.hide}</div></td>
     <td>${stp(r.id,'n',r.have)}</td>
     <td>${stp(r.id,'f',r.haveF)}${fw}</td>
     <td class="st ${r.state}">${label}</td><td class="c-hide mats">${yen(r.it.price)} ${esc(r.it.v)}</td></tr>`}).join('')
     ||'<tr><td colspan="7" style="text-align:center;color:var(--mu)">該当するアイテムがありません</td></tr>'}
-  </tbody></table></div>`;
+  </tbody></table>`;
   $('#q').oninput=e=>{S.q=e.target.value;keepFocus('#q',rItems)};
   $('#flt').value=S.flt;$('#flt').onchange=e=>{S.flt=e.target.value;rItems()};
   const setHave=(id,k,val)=>{
@@ -272,6 +272,8 @@ function rHide(){
 document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{S.mode=b.dataset.m;sv('mode',S.mode);S.q='';$('#stat').textContent='';boot(false)});
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;sv('tab',S.tab);S.q='';render()});
 $('#reload').onclick=()=>{$('#stat').textContent='';boot(true)};
+const setHH=()=>document.documentElement.style.setProperty('--hh',$('header').offsetHeight+'px');
+addEventListener('resize',setHH);setHH();
 boot(false);
 </script>
 </body>
