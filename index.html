@@ -41,6 +41,9 @@ td input[type=number]{width:62px;background:var(--bg);color:var(--tx);border:1px
 .st.bad{color:var(--bad)}.st.eq{color:var(--ac)}.st.ok{color:var(--sell)}
 .fir{color:var(--bad);font-size:11px;display:block}
 .hide{display:none}
+.stp{display:inline-flex;gap:4px;align-items:center}
+.stp button{width:30px;height:30px;padding:0;font-size:16px;line-height:1;text-align:center}
+td .stp input[type=number]{width:50px;text-align:center}
 #msg{padding:30px;text-align:center;color:var(--mu);white-space:pre-wrap}
 @media (max-width:640px){.c-hide{display:none}th{top:90px}}
 </style>
@@ -61,7 +64,9 @@ const B='https://json.tarkov.dev', TTL=12*3600e3;
 const TR={'54cb50c76803fa8b248b4571':'Prapor','54cb57776803fa99248b456e':'Therapist','58330581ace78e27b8b10cee':'Skier','5935c25fb3acc3127c3d8cd9':'Peacekeeper','5a7c2eca46aef81a7ca2145d':'Mechanic','5ac3b934156ae10c4430e83c':'Ragman','5c0647fdd443bc2504c2d371':'Jaeger','579dc571d53a0658a154fbec':'Fence','6617beeaa9cfa777ca915b7c':'Ref'};
 const CUR=new Set(['5449016a4bdc2d6f028b456f','5696686a4bdc2da3298b456a','569668774bdc2da2298b4568']); // ルーブル/ドル/ユーロは除外
 
-const S={mode:ld('mode','regular'),tab:ld('tab','items'),data:null,st:null,q:'',flt:'all',kappa:false,hideDone:false};
+const S={mode:ld('mode','regular'),tab:ld('tab','items'),data:null,st:null,q:'',flt:'all',kappa:false,hideDone:false,itemOnly:true};
+const ORDER=['Prapor','Therapist','Fence','Skier','Peacekeeper','Mechanic','Ragman','Jaeger','Ref','その他'];
+const ordr=k=>{const i=ORDER.indexOf(k);return i<0?99:i};
 function ld(k,d){try{const v=localStorage.getItem('tkv2:'+k);return v?JSON.parse(v):d}catch(e){return d}}
 function sv(k,v){try{localStorage.setItem('tkv2:'+k,JSON.stringify(v))}catch(e){}}
 const $=s=>document.querySelector(s);
@@ -170,6 +175,7 @@ function render(){
 }
 function keepFocus(sel,fn){fn();const el=$(sel);el.focus();el.setSelectionRange(99,99)}
 
+const stp=(id,k,v)=>`<div class="stp"><button class="p" data-id="${id}" data-k="${k}" data-d="-1" aria-label="減らす">−</button><input type="number" min="0" inputmode="numeric" data-id="${id}" data-k="${k}" value="${v}"><button class="p" data-id="${id}" data-k="${k}" data-d="1" aria-label="増やす">＋</button></div>`;
 function rItems(){
   const rows=needs().map(r=>{
     const h=S.st.have[r.id]||{n:0,f:0};
@@ -184,24 +190,30 @@ function rItems(){
   <p class="note">未クリアのタスク・ハイドアウトの必要数を合算。「探す」と「渡す」が両方あるタスクは多い方を採用し、「いずれか○個」型の納品は集計に含めずタスク側に表示します。所持数は自動保存されます。</p>
   <div class="bar"><input type="search" id="q" placeholder="アイテム名で検索" value="${esc(S.q)}">
   <select id="flt"><option value="all">すべて (${rows.length})</option><option value="bad">不足 (${cnt('bad')})</option><option value="eq">ちょうど (${cnt('eq')})</option><option value="ok">売却可 (${cnt('ok')})</option></select></div>
-  <table><thead><tr><th></th><th>アイテム</th><th class="n">必要</th><th>所持</th><th>FIR所持</th><th>判定</th><th class="c-hide">売値(最高)</th></tr></thead><tbody>
+  <div style="overflow-x:auto"><table><thead><tr><th></th><th>アイテム</th><th class="n">必要</th><th>所持</th><th>FIR所持</th><th>判定</th><th class="c-hide">売値(最高)</th></tr></thead><tbody>
   ${list.map(r=>{
     const label=r.state==='bad'?`不足 ${-r.diff}`:r.state==='eq'?'ちょうど':(r.need===0?'売却可（全数）':`売却可 +${r.diff}`);
     const fw=r.fir>0&&r.haveF<r.fir?`<span class="fir">FIR あと${r.fir-r.haveF}</span>`:'';
     return `<tr><td><img src="${esc(r.it.icon)}" alt="" loading="lazy"></td><td>${esc(r.it.n)}</td>
     <td class="n" title="タスク ${r.task} / ハイドアウト ${r.hide}">${r.need}${r.fir?`<span class="mats"> (FIR ${r.fir})</span>`:''}<div class="mats">T${r.task} / H${r.hide}</div></td>
-    <td><input type="number" min="0" data-id="${r.id}" data-k="n" value="${r.have}"></td>
-    <td><input type="number" min="0" data-id="${r.id}" data-k="f" value="${r.haveF}">${fw}</td>
+    <td>${stp(r.id,'n',r.have)}</td>
+    <td>${stp(r.id,'f',r.haveF)}${fw}</td>
     <td class="st ${r.state}">${label}</td><td class="c-hide mats">${yen(r.it.price)} ${esc(r.it.v)}</td></tr>`}).join('')
     ||'<tr><td colspan="7" style="text-align:center;color:var(--mu)">該当するアイテムがありません</td></tr>'}
-  </tbody></table>`;
+  </tbody></table></div>`;
   $('#q').oninput=e=>{S.q=e.target.value;keepFocus('#q',rItems)};
   $('#flt').value=S.flt;$('#flt').onchange=e=>{S.flt=e.target.value;rItems()};
-  document.querySelectorAll('td input[type=number]').forEach(i=>i.onchange=()=>{
-    const h=S.st.have[i.dataset.id]||(S.st.have[i.dataset.id]={n:0,f:0});
-    h[i.dataset.k]=Math.max(0,parseInt(i.value)||0);
-    if(i.dataset.k==='f'&&h.f>h.n)h.n=h.f;
+  const setHave=(id,k,val)=>{
+    const h=S.st.have[id]||(S.st.have[id]={n:0,f:0});
+    h[k]=Math.max(0,val);
+    if(k==='f'&&h.f>h.n)h.n=h.f;
+    if(k==='n'&&h.f>h.n)h.f=h.n;
     sv('state:'+S.mode,S.st);rItems();
+  };
+  document.querySelectorAll('td input[type=number]').forEach(i=>i.onchange=()=>setHave(i.dataset.id,i.dataset.k,parseInt(i.value)||0));
+  document.querySelectorAll('td button[data-d]').forEach(b=>b.onclick=()=>{
+    const h=S.st.have[b.dataset.id]||{n:0,f:0};
+    setHave(b.dataset.id,b.dataset.k,(h[b.dataset.k]||0)+parseInt(b.dataset.d));
   });
 }
 
@@ -215,6 +227,7 @@ function rTasks(){
   S.data.tasks.forEach(t=>{
     if(q&&!(t.name+t.trader).toLowerCase().includes(q))return;
     if(S.kappa&&!t.kappa)return;
+    if(S.itemOnly&&!t.mats.length&&!t.any.length)return;
     if(S.hideDone&&S.st.tasks[t.id])return;
     (by[t.trader]=by[t.trader]||[]).push(t);
   });
@@ -222,13 +235,15 @@ function rTasks(){
   const open=new Set([...document.querySelectorAll('details[open] summary')].map(s=>s.dataset.k));
   $('#view').innerHTML=`<div class="bar"><input type="search" id="q" placeholder="タスク名・トレーダーで検索" value="${esc(S.q)}">
   <label><input type="checkbox" id="kp" ${S.kappa?'checked':''}> Kappa必須のみ</label>
+  <label><input type="checkbox" id="io" ${S.itemOnly?'checked':''}> アイテム納品ありのみ</label>
   <label><input type="checkbox" id="hd" ${S.hideDone?'checked':''}> クリア済みを隠す</label>
   <span class="mats">クリア済み ${done} / ${total}</span></div>`+
-  Object.keys(by).sort().map(tr=>`<details ${q||open.has(tr)?'open':''}><summary data-k="${esc(tr)}">${esc(tr)}<span>${by[tr].filter(t=>S.st.tasks[t.id]).length} / ${by[tr].length}</span></summary>
+  Object.keys(by).sort((a,b)=>ordr(a)-ordr(b)).map(tr=>`<details ${q||open.has(tr)?'open':''}><summary data-k="${esc(tr)}">${esc(tr)}<span>${by[tr].filter(t=>S.st.tasks[t.id]).length} / ${by[tr].length}</span></summary>
   ${by[tr].sort((a,b)=>a.lvl-b.lvl).map(t=>`<div class="row ${S.st.tasks[t.id]?'done':''}"><label><input type="checkbox" data-id="${t.id}" ${S.st.tasks[t.id]?'checked':''}>
   <div>${esc(t.name)}<span class="tag">Lv${t.lvl}</span>${t.kappa?'<span class="tag k">Kappa</span>':''}<div class="mats">${matText(t)}</div></div></label></div>`).join('')}</details>`).join('');
   $('#q').oninput=e=>{S.q=e.target.value;keepFocus('#q',rTasks)};
   $('#kp').onchange=e=>{S.kappa=e.target.checked;rTasks()};
+  $('#io').onchange=e=>{S.itemOnly=e.target.checked;rTasks()};
   $('#hd').onchange=e=>{S.hideDone=e.target.checked;rTasks()};
   document.querySelectorAll('.row input[type=checkbox]').forEach(c=>c.onchange=()=>{
     if(c.checked)S.st.tasks[c.dataset.id]=1;else delete S.st.tasks[c.dataset.id];
