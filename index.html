@@ -42,6 +42,25 @@ td input[type=number]{width:62px;background:var(--bg);color:var(--tx);border:1px
 .st.bad{color:var(--bad)}.st.eq{color:var(--ac)}.st.ok{color:var(--sell)}
 .fir{color:var(--bad);font-size:11px;display:block}
 .hide{display:none}
+.fwrap{overflow-x:auto;padding:12px}
+.fchain{position:relative}
+.fchain svg{position:absolute;left:0;top:0;pointer-events:none}
+.fchain .fnode{position:absolute}
+.fsolo{display:flex;flex-wrap:wrap;gap:12px}
+.fchain+.fsolo{margin-top:16px}
+.fnode{width:200px;height:112px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);cursor:pointer;overflow:hidden;display:flex;flex-direction:column;gap:2px;font-size:12px}
+.fnode:hover{background:var(--panel)}
+.fnode.done{opacity:.5}
+.fnode.avail{border-color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
+.fnode.lock{border-style:dashed;color:var(--mu)}
+.fnode.dim{opacity:.2}
+.ft{font-weight:700;font-size:13px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fm,.fi{color:var(--mu);font-size:11px}
+.fi{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fx{font-size:11px;margin-top:auto;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fx.ok{color:var(--ok)}.fx.td{color:var(--ac)}
+.fe{fill:none;stroke:var(--line);stroke-width:1.5}
+.fe.act{stroke:var(--ac)}
 .stp{display:inline-flex;gap:4px;align-items:center}
 .stp button{width:30px;height:30px;padding:0;font-size:16px;line-height:1;text-align:center}
 td .stp input[type=number]{width:50px;text-align:center}
@@ -64,7 +83,7 @@ const B='https://json.tarkov.dev', TTL=12*3600e3;
 const TR={'54cb50c76803fa8b248b4571':'Prapor','54cb57776803fa99248b456e':'Therapist','58330581ace78e27b8b10cee':'Skier','5935c25fb3acc3127c3d8cd9':'Peacekeeper','5a7c2eca46aef81a7ca2145d':'Mechanic','5ac3b934156ae10c4430e83c':'Ragman','5c0647fdd443bc2504c2d371':'Jaeger','579dc571d53a0658a154fbec':'Fence','6617beeaa9cfa777ca915b7c':'Ref'};
 const CUR=new Set(['5449016a4bdc2d6f028b456f','5696686a4bdc2da3298b456a','569668774bdc2da2298b4568']); // ルーブル/ドル/ユーロは除外
 
-const S={mode:ld('mode','regular'),tab:ld('tab','items'),data:null,st:null,q:'',flt:'all',kappa:false,hideDone:false,itemOnly:true};
+const S={mode:ld('mode','regular'),tab:ld('tab','items'),data:null,st:null,q:'',flt:'all',kappa:false,hideDone:false,itemOnly:true,plantOnly:false,tview:ld('tview','list')};
 const ORDER=['Prapor','Therapist','Fence','Skier','Peacekeeper','Mechanic','Ragman','Jaeger','Ref','その他'];
 const ordr=k=>{const i=ORDER.indexOf(k);return i<0?99:i};
 function ld(k,d){try{const v=localStorage.getItem('tkv2:'+k);return v?JSON.parse(v):d}catch(e){return d}}
@@ -100,23 +119,27 @@ function nm(L,ph,o){
 }
 
 async function fetchData(force){
-  const key='data:'+S.mode,c=ld(key,null);
+  const key='data4:'+S.mode,c=ld(key,null);
   if(!force&&c&&Date.now()-c.t<TTL)return c;
   const m=S.mode;
   $('#msg').textContent='データ取得中…（アイテムデータは約16MB。初回のみ時間がかかります）';
   const [tk,it,hd,L]=await Promise.all([getJ(`${B}/${m}/tasks`),getJ(`${B}/${m}/items`),getJ(`${B}/${m}/hideout`),locale(m)]);
   const raw=it.items||it, items={}, need=new Set();
   const tasks=arr(tk.tasks).map(t=>{
-    const mm={},any=[];
+    const mm={},any=[],pl={};
     (t.objectives||[]).forEach(o=>{
-      if(o.optional||!(o.type==='giveItem'||o.type==='findItem')||!o.items)return;
+      if(o.optional||!o.items)return;
+      if(o.type==='plantItem'){if(o.items.length===1){const id=o.items[0];pl[id]=(pl[id]||0)+(o.count||1)}return}
+      if(!(o.type==='giveItem'||o.type==='findItem'))return;
       if(o.items.length===1){ // 「探す」と「渡す」の二重計上を避け、多い方を採用
         const id=o.items[0],r=mm[id]||(mm[id]={id,n:0,f:false});
         r.n=Math.max(r.n,o.count||1);r.f=r.f||!!o.foundInRaid;
       }else if(o.type==='giveItem')any.push({n:o.count||1,f:!!o.foundInRaid});
     });
     Object.keys(mm).forEach(id=>need.add(id));
-    return {id:t.id,name:nm(L,t.name,t),trader:TR[t.trader]||'その他',lvl:t.minPlayerLevel||0,kappa:!!t.kappaRequired,mats:Object.values(mm),any};
+    Object.keys(pl).forEach(id=>need.add(id));
+    return {id:t.id,name:nm(L,t.name,t),trader:TR[t.trader]||'その他',lvl:t.minPlayerLevel||0,kappa:!!t.kappaRequired,mats:Object.values(mm),any,plant:Object.keys(pl).map(id=>({id,n:pl[id]})),
+      req:(t.taskRequirements||[]).filter(r=>r.status&&r.status.length===1&&r.status[0]==='complete').map(r=>r.task)};
   });
   const stations=arr(hd.hideoutStations||hd).map(s=>({
     id:s.id,name:L[s.name]||(s.normalizedName||s.id).replace(/-/g,' '),
@@ -129,7 +152,8 @@ async function fetchData(force){
     if(!o){items[id]={n:id,s:id,icon:'',price:0,v:''};return}
     let best=0,v='';
     (o.sellToTrader||[]).forEach(x=>{if(x.priceRUB>best){best=x.priceRUB;v=TR[x.trader]||''}});
-    items[id]={n:nm(L,o.name,o),s:L[o.shortName]||nm(L,o.name,o),icon:o.iconLink||'',price:best||0,v};
+    items[id]={n:nm(L,o.name,o),s:L[o.shortName]||nm(L,o.name,o),icon:o.iconLink||'',price:best||0,v,
+      fa:o.avg24hPrice||0,fl:o.lastLowPrice||0,flo:o.low24hPrice||0,fh:o.high24hPrice||0,fc:o.changeLast48hPercent,nf:(o.types||[]).includes('noFlea')};
   });
   const d={t:Date.now(),tasks,stations,items,ja:Object.keys(L).length>0};
   sv(key,d);return d;
@@ -140,7 +164,7 @@ async function boot(force){
   S.st=ld('state:'+S.mode,{tasks:{},hideout:{},have:{}});
   try{S.data=await fetchData(force)}
   catch(e){
-    const old=ld('data:'+S.mode,null);
+    const old=ld('data4:'+S.mode,null);
     if(old){S.data=old;$('#stat').textContent='取得失敗・古いキャッシュを表示中'}
     else{
       const f=location.protocol==='file:';
@@ -156,10 +180,14 @@ async function boot(force){
 const IT=id=>S.data.items[id]||{n:id,s:id,icon:'',price:0,v:''};
 
 function needs(){
-  const A={},g=id=>A[id]||(A[id]={id,need:0,fir:0,task:0,hide:0});
+  const A={},g=id=>A[id]||(A[id]={id,need:0,fir:0,task:0,hide:0,plantRaw:0});
   S.data.tasks.forEach(t=>t.mats.forEach(m=>{
     if(CUR.has(m.id))return;const r=g(m.id);
     if(!S.st.tasks[t.id]){r.need+=m.n;r.task+=m.n;if(m.f)r.fir+=m.n}
+  }));
+  S.data.tasks.forEach(t=>(t.plant||[]).forEach(m=>{
+    if(CUR.has(m.id))return;const r=g(m.id);
+    if(!S.st.tasks[t.id])r.plantRaw+=m.n;
   }));
   S.data.stations.forEach(s=>s.levels.forEach(l=>l.mats.forEach(q=>{
     if(CUR.has(q.id))return;const r=g(q.id);
@@ -175,11 +203,18 @@ function render(){
 }
 function keepFocus(sel,fn){fn();const el=$(sel);el.focus();el.setSelectionRange(99,99)}
 
+const priceCells=it=>{
+  const t=it.price||0,f=it.nf?0:(it.fa||0);
+  const hi=' style="color:var(--ok)"';
+  const tip=it.nf?'':`最安 ${yen(it.fl)} / 24h安値 ${yen(it.flo)} / 24h高値 ${yen(it.fh)} / 48h変動 ${it.fc==null?'-':it.fc+'%'}`;
+  return `<td class="mats"${t&&t>=f?hi:''}>${yen(t)} ${esc(it.v)}</td><td class="mats"${f&&f>t?hi:''} title="${esc(tip)}">${it.nf?'フリマ不可':f?yen(f):'-'}</td>`;
+};
 const stp=(id,k,v)=>`<div class="stp"><button class="p" data-id="${id}" data-k="${k}" data-d="-1" aria-label="減らす">−</button><input type="number" min="0" inputmode="numeric" data-id="${id}" data-k="${k}" value="${v}"><button class="p" data-id="${id}" data-k="${k}" data-d="1" aria-label="増やす">＋</button></div>`;
 function rItems(){
   const rows=needs().map(r=>{
     const h=S.st.have[r.id]||{n:0,f:0};
-    r.it=IT(r.id);r.have=h.n;r.haveF=h.f;r.diff=h.n-r.need;
+    r.it=IT(r.id);r.have=h.n;r.haveF=h.f;r.placed=h.p||0;
+    r.plant=Math.max(0,r.plantRaw-r.placed);r.need+=r.plant;r.diff=h.n-r.need;
     r.state=r.diff<0?'bad':(r.diff===0&&r.need>0?'eq':'ok');return r;
   });
   const q=S.q.toLowerCase();
@@ -187,19 +222,19 @@ function rItems(){
     .sort((a,b)=>(b.need>0)-(a.need>0)||a.it.n.localeCompare(b.it.n,'ja'));
   const cnt=k=>rows.filter(r=>r.state===k).length;
   $('#view').innerHTML=`
-  <p class="note">未クリアのタスク・ハイドアウトの必要数を合算。「探す」と「渡す」が両方あるタスクは多い方を採用し、「いずれか○個」型の納品は集計に含めずタスク側に表示します。所持数は自動保存されます。</p>
+  <p class="note">未クリアのタスク・ハイドアウトの必要数を合算。「探す」と「渡す」が両方あるタスクは多い方を採用し、「いずれか○個」型の納品は集計に含めずタスク側に表示します。設置系タスクのアイテムは「P」で表し、所持の下の「設置済み」に入力した数だけ必要数が減ります（一部だけ設置した場合用）。売値はトレーダー最高価格とフリマの24時間平均を並べ、高い方を緑で表示します（フリマは手数料がかかり、FIRのアイテムのみ出品可。マウスを乗せると最安値・変動率が出ます）。所持数は自動保存されます。</p>
   <div class="bar"><input type="search" id="q" placeholder="アイテム名で検索" value="${esc(S.q)}">
   <select id="flt"><option value="all">すべて (${rows.length})</option><option value="bad">不足 (${cnt('bad')})</option><option value="eq">ちょうど (${cnt('eq')})</option><option value="ok">売却可 (${cnt('ok')})</option></select></div>
-  <table><thead><tr><th></th><th>アイテム</th><th class="n">必要</th><th>所持</th><th>FIR所持</th><th>判定</th><th class="c-hide">売値(最高)</th></tr></thead><tbody>
+  <table><thead><tr><th></th><th>アイテム</th><th class="n">必要</th><th>所持</th><th>FIR所持</th><th>判定</th><th>トレーダー最高</th><th>フリマ平均(24h)</th></tr></thead><tbody>
   ${list.map(r=>{
     const label=r.state==='bad'?`不足 ${-r.diff}`:r.state==='eq'?'ちょうど':(r.need===0?'売却可（全数）':`売却可 +${r.diff}`);
     const fw=r.fir>0&&r.haveF<r.fir?`<span class="fir">FIR あと${r.fir-r.haveF}</span>`:'';
     return `<tr><td><img src="${esc(r.it.icon)}" alt="" loading="lazy"></td><td class="nm">${esc(r.it.n)}</td>
-    <td class="n" title="タスク ${r.task} / ハイドアウト ${r.hide}">${r.need}${r.fir?`<span class="mats"> (FIR ${r.fir})</span>`:''}<div class="mats">T${r.task} / H${r.hide}</div></td>
-    <td>${stp(r.id,'n',r.have)}</td>
+    <td class="n" title="タスク ${r.task} / ハイドアウト ${r.hide} / 設置 ${r.plant}">${r.need}${r.fir?`<span class="mats"> (FIR ${r.fir})</span>`:''}<div class="mats">T${r.task} / H${r.hide} / P${r.plant}</div></td>
+    <td>${stp(r.id,'n',r.have)}${r.plantRaw>0||r.placed?`<div class="mats">設置済み</div>${stp(r.id,'p',r.placed)}`:''}</td>
     <td>${stp(r.id,'f',r.haveF)}${fw}</td>
-    <td class="st ${r.state}">${label}</td><td class="c-hide mats">${yen(r.it.price)} ${esc(r.it.v)}</td></tr>`}).join('')
-    ||'<tr><td colspan="7" style="text-align:center;color:var(--mu)">該当するアイテムがありません</td></tr>'}
+    <td class="st ${r.state}">${label}</td>${priceCells(r.it)}</tr>`}).join('')
+    ||'<tr><td colspan="8" style="text-align:center;color:var(--mu)">該当するアイテムがありません</td></tr>'}
   </tbody></table>`;
   $('#q').oninput=e=>{S.q=e.target.value;keepFocus('#q',rItems)};
   $('#flt').value=S.flt;$('#flt').onchange=e=>{S.flt=e.target.value;rItems()};
@@ -220,33 +255,126 @@ function rItems(){
 function matText(t){
   const a=t.mats.map(m=>esc(IT(m.id).s)+'×'+m.n+(m.f?'(FIR)':''));
   t.any.forEach(x=>a.push('いずれか×'+x.n+(x.f?'(FIR)':'')));
+  (t.plant||[]).forEach(x=>a.push('設置:'+esc(IT(x.id).s)+'×'+x.n));
   return a.length?a.join(' / '):'アイテム納品なし';
 }
+/* 前提タスクの連動: チェック→前提を全てチェック / 外す→それに依存するタスクも外す */
+function setTask(id,on){
+  const T={};S.data.tasks.forEach(t=>T[t.id]=t);
+  const seen=new Set();let n=0;
+  (function go(i,first){
+    if(seen.has(i)||!T[i])return;seen.add(i);
+    if(on){
+      if(!S.st.tasks[i]){S.st.tasks[i]=1;if(!first)n++}
+      (T[i].req||[]).forEach(r=>go(r,false));
+    }else{
+      if(S.st.tasks[i]){delete S.st.tasks[i];if(!first)n++}
+      S.data.tasks.forEach(x=>{if((x.req||[]).includes(i))go(x.id,false)});
+    }
+  })(id,true);
+  S.tmsg=n?(on?`前提タスク ${n} 件も自動でクリア済みにしました`:`依存するタスク ${n} 件のチェックも外しました`):'';
+}
+/* ---------- フローチャート表示 ---------- */
+const FW=200,FH=112,FGX=56,FGY=12;
+let fuid=0;
+function tOk(t,q){
+  return !((q&&!(t.name+t.trader).toLowerCase().includes(q))||(S.kappa&&!t.kappa)||
+    (S.itemOnly&&!t.mats.length&&!t.any.length&&!(t.plant||[]).length)||(S.plantOnly&&!(t.plant||[]).length));
+}
+function fnode(t,T,q,pos){
+  const done=!!S.st.tasks[t.id];
+  if(S.hideDone&&done)return '';
+  const avail=!done&&(t.req||[]).every(r=>S.st.tasks[r]||!T[r]);
+  const ext=(t.req||[]).filter(r=>T[r]&&T[r].trader!==t.trader);
+  let chip='',tip=t.name;
+  if(ext.length){
+    const f=T[ext[0]],fd=!!S.st.tasks[f.id];
+    chip=`<div class="fx ${fd?'ok':'td'}">${fd?'✓ ':''}${esc(f.trader)} から: ${esc(f.name)}${ext.length>1?`（他${ext.length-1}件）`:''}</div>`;
+    tip+='\n'+ext.map(r=>(S.st.tasks[r]?'✓ ':'')+T[r].trader+' から: '+T[r].name).join('\n');
+  }
+  return `<div class="fnode ${done?'done':avail?'avail':'lock'}${tOk(t,q)?'':' dim'}" data-id="${t.id}" title="${esc(tip)}"${pos?` style="left:${pos[0]}px;top:${pos[1]}px"`:''}>
+  <div class="ft">${esc(t.name)}</div><div class="fm">Lv${t.lvl}${t.kappa?' ・Kappa':''} ・ ${done?'クリア済み':avail?'今できる':'前提未クリア'}</div>
+  <div class="fi">${matText(t)}</div>${chip}</div>`;
+}
+function flowSection(tr,list,T,q,open,first){
+  const ids=new Set(list.map(t=>t.id)),L={};list.forEach(t=>L[t.id]=t);
+  const pre=t=>(t.req||[]).filter(r=>ids.has(r));
+  const linked=new Set();
+  list.forEach(t=>pre(t).forEach(r=>{linked.add(t.id);linked.add(r)}));
+  const chain=list.filter(t=>linked.has(t.id));
+  const solo=list.filter(t=>!linked.has(t.id)).sort((a,b)=>a.lvl-b.lvl||a.name.localeCompare(b.name));
+  const col={};
+  const dep=t=>col[t.id]!==undefined?col[t.id]:(col[t.id]=0,col[t.id]=Math.max(-1,...pre(t).map(r=>dep(L[r])))+1);
+  chain.forEach(dep);
+  const cols=[];chain.forEach(t=>(cols[col[t.id]]=cols[col[t.id]]||[]).push(t));
+  const row={};
+  cols.forEach(c=>{
+    const b={};
+    c.forEach(t=>{const p=pre(t).map(r=>row[r]).filter(v=>v!==undefined);b[t.id]=p.length?p.reduce((x,y)=>x+y,0)/p.length:1e9});
+    c.sort((x,y)=>b[x.id]-b[y.id]||x.lvl-y.lvl||x.name.localeCompare(y.name));
+    c.forEach((t,i)=>row[t.id]=i);
+  });
+  const W=cols.length*(FW+FGX)-FGX,H=Math.max(0,...cols.map(c=>c.length))*(FH+FGY)-FGY;
+  const mid=`fa${fuid++}`;
+  let edges='',nodes='';
+  chain.forEach(t=>{
+    const x2=col[t.id]*(FW+FGX),y2=row[t.id]*(FH+FGY)+FH/2;
+    pre(t).forEach(r=>{
+      if(S.hideDone&&(S.st.tasks[r]||S.st.tasks[t.id]))return;
+      const x1=col[r]*(FW+FGX)+FW,y1=row[r]*(FH+FGY)+FH/2,dx=(x2-x1)/2;
+      edges+=`<path class="fe${S.st.tasks[r]&&!S.st.tasks[t.id]?' act':''}" d="M${x1} ${y1}C${x1+dx} ${y1} ${x2-dx} ${y2} ${x2-4} ${y2}" marker-end="url(#${mid})"/>`;
+    });
+    nodes+=fnode(t,T,q,[x2,row[t.id]*(FH+FGY)]);
+  });
+  const done=list.filter(t=>S.st.tasks[t.id]).length;
+  return `<details ${q||open.has(tr)||(!open.size&&first)?'open':''}><summary data-k="${esc(tr)}">${esc(tr)}<span>${done} / ${list.length}</span></summary>
+  <div class="fwrap" data-k="${esc(tr)}">${chain.length?`<div class="fchain" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}"><defs><marker id="${mid}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="context-stroke"/></marker></defs>${edges}</svg>${nodes}</div>`:''}
+  ${solo.length?`<div class="fsolo">${solo.map(t=>fnode(t,T,q,null)).join('')}</div>`:''}</div></details>`;
+}
+function flowAll(q,open){
+  const T={},by={};
+  S.data.tasks.forEach(t=>{T[t.id]=t;(by[t.trader]=by[t.trader]||[]).push(t)});
+  return Object.keys(by).sort((a,b)=>ordr(a)-ordr(b)).map((tr,i)=>flowSection(tr,by[tr],T,q,open,i===0)).join('');
+}
+
 function rTasks(){
   const q=S.q.toLowerCase(),by={};
   S.data.tasks.forEach(t=>{
     if(q&&!(t.name+t.trader).toLowerCase().includes(q))return;
     if(S.kappa&&!t.kappa)return;
-    if(S.itemOnly&&!t.mats.length&&!t.any.length)return;
+    if(S.itemOnly&&!t.mats.length&&!t.any.length&&!(t.plant||[]).length)return;
+    if(S.plantOnly&&!(t.plant||[]).length)return;
     if(S.hideDone&&S.st.tasks[t.id])return;
     (by[t.trader]=by[t.trader]||[]).push(t);
   });
   const total=S.data.tasks.length,done=S.data.tasks.filter(t=>S.st.tasks[t.id]).length;
   const open=new Set([...document.querySelectorAll('details[open] summary')].map(s=>s.dataset.k));
-  $('#view').innerHTML=`<div class="bar"><input type="search" id="q" placeholder="タスク名・トレーダーで検索" value="${esc(S.q)}">
+  const sl={};document.querySelectorAll('.fwrap').forEach(w=>sl[w.dataset.k]=w.scrollLeft);
+  $('#view').innerHTML=`<div class="bar"><div class="seg" id="tv"><button data-v="list">一覧</button><button data-v="flow">フローチャート</button></div><input type="search" id="q" placeholder="タスク名・トレーダーで検索" value="${esc(S.q)}">
   <label><input type="checkbox" id="kp" ${S.kappa?'checked':''}> Kappa必須のみ</label>
   <label><input type="checkbox" id="io" ${S.itemOnly?'checked':''}> アイテム納品ありのみ</label>
+  <label><input type="checkbox" id="po" ${S.plantOnly?'checked':''}> 設置タスクのみ</label>
   <label><input type="checkbox" id="hd" ${S.hideDone?'checked':''}> クリア済みを隠す</label>
-  <span class="mats">クリア済み ${done} / ${total}</span></div>`+
-  Object.keys(by).sort((a,b)=>ordr(a)-ordr(b)).map(tr=>`<details ${q||open.has(tr)?'open':''}><summary data-k="${esc(tr)}">${esc(tr)}<span>${by[tr].filter(t=>S.st.tasks[t.id]).length} / ${by[tr].length}</span></summary>
+  <span class="mats">クリア済み ${done} / ${total}</span><span class="mats" style="color:var(--ac)">${esc(S.tmsg||'')}</span></div>`+
+  (S.tview==='flow'?flowAll(q,open):Object.keys(by).sort((a,b)=>ordr(a)-ordr(b)).map(tr=>`<details ${q||open.has(tr)?'open':''}><summary data-k="${esc(tr)}">${esc(tr)}<span>${by[tr].filter(t=>S.st.tasks[t.id]).length} / ${by[tr].length}</span></summary>
   ${by[tr].sort((a,b)=>a.lvl-b.lvl).map(t=>`<div class="row ${S.st.tasks[t.id]?'done':''}"><label><input type="checkbox" data-id="${t.id}" ${S.st.tasks[t.id]?'checked':''}>
-  <div>${esc(t.name)}<span class="tag">Lv${t.lvl}</span>${t.kappa?'<span class="tag k">Kappa</span>':''}<div class="mats">${matText(t)}</div></div></label></div>`).join('')}</details>`).join('');
+  <div>${esc(t.name)}<span class="tag">Lv${t.lvl}</span>${t.kappa?'<span class="tag k">Kappa</span>':''}<div class="mats">${matText(t)}</div></div></label></div>`).join('')}</details>`).join(''));
   $('#q').oninput=e=>{S.q=e.target.value;keepFocus('#q',rTasks)};
   $('#kp').onchange=e=>{S.kappa=e.target.checked;rTasks()};
   $('#io').onchange=e=>{S.itemOnly=e.target.checked;rTasks()};
+  $('#po').onchange=e=>{S.plantOnly=e.target.checked;rTasks()};
   $('#hd').onchange=e=>{S.hideDone=e.target.checked;rTasks()};
+  document.querySelectorAll('#tv button').forEach(b=>{
+    b.classList.toggle('on',b.dataset.v===S.tview);
+    b.onclick=()=>{S.tview=b.dataset.v;sv('tview',S.tview);S.tmsg='';rTasks()};
+  });
+  document.querySelectorAll('.fwrap').forEach(w=>{if(sl[w.dataset.k])w.scrollLeft=sl[w.dataset.k]});
+  document.querySelectorAll('.fnode').forEach(n=>n.onclick=()=>{
+    setTask(n.dataset.id,!S.st.tasks[n.dataset.id]);
+    sv('state:'+S.mode,S.st);rTasks();
+  });
   document.querySelectorAll('.row input[type=checkbox]').forEach(c=>c.onchange=()=>{
-    if(c.checked)S.st.tasks[c.dataset.id]=1;else delete S.st.tasks[c.dataset.id];
+    setTask(c.dataset.id,c.checked);
     sv('state:'+S.mode,S.st);rTasks();
   });
 }
@@ -270,7 +398,7 @@ function rHide(){
 }
 
 document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{S.mode=b.dataset.m;sv('mode',S.mode);S.q='';$('#stat').textContent='';boot(false)});
-document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;sv('tab',S.tab);S.q='';render()});
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.tmsg='';sv('tab',S.tab);S.q='';render()});
 $('#reload').onclick=()=>{$('#stat').textContent='';boot(true)};
 const setHH=()=>document.documentElement.style.setProperty('--hh',$('header').offsetHeight+'px');
 addEventListener('resize',setHH);setHH();
