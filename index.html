@@ -2,13 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tarkov アイテム管理</title>
 <style>
 :root{--bg:#1b1d1a;--panel:#25282a;--line:#3a3e3a;--tx:#d9d4c3;--mu:#8c8a7d;--ac:#c2a96a;--bad:#d0634c;--ok:#86ab80;--sell:#6fa3c0;color-scheme:dark}
 @media (prefers-color-scheme:light){:root{--bg:#ecebe4;--panel:#f8f7f2;--line:#cfccbd;--tx:#25262a;--mu:#6d6b5f;--ac:#7d6a2c;--bad:#b4402b;--ok:#4a7a44;--sell:#2f6f94;color-scheme:light}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 "Noto Sans JP","Hiragino Sans",Meiryo,sans-serif}
+body{margin:0;min-width:1100px;background:var(--bg);color:var(--tx);font:14px/1.5 "Noto Sans JP","Hiragino Sans",Meiryo,sans-serif}
 header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 h1{font-size:16px;margin:0 8px 0 0;font-weight:700}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
@@ -18,7 +17,10 @@ button.p,select,input[type=search]{background:var(--panel);color:var(--tx);borde
 button.p{cursor:pointer}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
 #stat{color:var(--mu);font-size:12px;margin-left:auto}
-main{padding:14px;max-width:1280px;margin:0 auto}
+main{padding:16px 24px;max-width:1600px;margin:0 auto}
+.lgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;align-items:start}
+.hgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:8px 12px;align-items:start}
+.lgrid details,.hgrid details{margin:0}
 .bar{display:flex;flex-wrap:wrap;gap:8px 14px;margin-bottom:12px;align-items:center}
 .note{color:var(--mu);font-size:12px;margin:0 0 12px}
 details{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin-bottom:8px}
@@ -356,9 +358,9 @@ function rTasks(){
   <label><input type="checkbox" id="po" ${S.plantOnly?'checked':''}> 設置タスクのみ</label>
   <label><input type="checkbox" id="hd" ${S.hideDone?'checked':''}> クリア済みを隠す</label>
   <span class="mats">クリア済み ${done} / ${total}</span><span class="mats" style="color:var(--ac)">${esc(S.tmsg||'')}</span></div>`+
-  (S.tview==='flow'?flowAll(q,open):Object.keys(by).sort((a,b)=>ordr(a)-ordr(b)).map(tr=>`<details ${q||open.has(tr)?'open':''}><summary data-k="${esc(tr)}">${esc(tr)}<span>${by[tr].filter(t=>S.st.tasks[t.id]).length} / ${by[tr].length}</span></summary>
+  (S.tview==='flow'?flowAll(q,open):'<div class="lgrid">'+Object.keys(by).sort((a,b)=>ordr(a)-ordr(b)).map(tr=>`<details ${q||open.has(tr)?'open':''}><summary data-k="${esc(tr)}">${esc(tr)}<span>${by[tr].filter(t=>S.st.tasks[t.id]).length} / ${by[tr].length}</span></summary>
   ${by[tr].sort((a,b)=>a.lvl-b.lvl).map(t=>`<div class="row ${S.st.tasks[t.id]?'done':''}"><label><input type="checkbox" data-id="${t.id}" ${S.st.tasks[t.id]?'checked':''}>
-  <div>${esc(t.name)}<span class="tag">Lv${t.lvl}</span>${t.kappa?'<span class="tag k">Kappa</span>':''}<div class="mats">${matText(t)}</div></div></label></div>`).join('')}</details>`).join(''));
+  <div>${esc(t.name)}<span class="tag">Lv${t.lvl}</span>${t.kappa?'<span class="tag k">Kappa</span>':''}<div class="mats">${matText(t)}</div></div></label></div>`).join('')}</details>`).join('')+'</div>');
   $('#q').oninput=e=>{S.q=e.target.value;keepFocus('#q',rTasks)};
   $('#kp').onchange=e=>{S.kappa=e.target.checked;rTasks()};
   $('#io').onchange=e=>{S.itemOnly=e.target.checked;rTasks()};
@@ -384,9 +386,9 @@ function rHide(){
   const open=new Set([...document.querySelectorAll('details[open] summary')].map(s=>s.dataset.k));
   const first=!document.querySelector('details');
   $('#view').innerHTML=`<p class="note">建設済みのレベルにチェックを入れてください。上位レベルにチェックすると下位レベルも自動でチェックされます。</p>`+
-  S.data.stations.map(s=>`<details ${first||open.has(s.id)?'open':''}><summary data-k="${s.id}">${esc(s.name)}<span>${s.levels.filter(l=>S.st.hideout[l.id]).length} / ${s.levels.length}</span></summary>
+  '<div class="hgrid">'+S.data.stations.map(s=>`<details ${first||open.has(s.id)?'open':''}><summary data-k="${s.id}">${esc(s.name)}<span>${s.levels.filter(l=>S.st.hideout[l.id]).length} / ${s.levels.length}</span></summary>
   ${s.levels.map(l=>`<div class="row ${S.st.hideout[l.id]?'done':''}"><label><input type="checkbox" data-s="${s.id}" data-id="${l.id}" ${S.st.hideout[l.id]?'checked':''}>
-  <div>Lv${l.level}<div class="mats">${l.mats.length?l.mats.map(q=>esc(IT(q.id).s)+'×'+q.n).join(' / '):'必要アイテムなし'}</div></div></label></div>`).join('')}</details>`).join('');
+  <div>Lv${l.level}<div class="mats">${l.mats.length?l.mats.map(q=>esc(IT(q.id).s)+'×'+q.n).join(' / '):'必要アイテムなし'}</div></div></label></div>`).join('')}</details>`).join('')+'</div>';
   document.querySelectorAll('.row input[type=checkbox]').forEach(c=>c.onchange=()=>{
     const st=S.data.stations.find(s=>s.id===c.dataset.s),idx=st.levels.findIndex(l=>l.id===c.dataset.id);
     st.levels.forEach((l,i)=>{
